@@ -3,7 +3,8 @@ frappe.query_reports["SKU List Report"] = {
         {
             "fieldname": "sku_code",
             "label": "SKU Code",
-            "fieldtype": "Data"
+            "fieldtype": "Link",
+            "options": "SKU"
         },
         {
             "fieldname": "metal",
