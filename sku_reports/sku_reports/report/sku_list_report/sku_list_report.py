@@ -115,6 +115,9 @@ def execute(filters=None):
     return columns, data
 
 
+# =========================
+# COLUMNS
+# =========================
 def get_columns():
     return [
         {
@@ -135,6 +138,9 @@ def get_columns():
     ]
 
 
+# =========================
+# DATA
+# =========================
 def get_data(filters):
     conditions = " WHERE 1=1 "
     values = {}
@@ -171,26 +177,23 @@ def get_data(filters):
         ORDER BY modified DESC
     """, values, as_dict=True)
 
+    # =========================
+    # IMAGE HTML
+    # =========================
     for d in data:
         img = d.get("image_url")
 
         if img:
             d["image_html"] = f"""
-                <div style="height:140px;width:140px;display:flex;align-items:center;justify-content:center;">
-                    <img src="{img}"
-                        style="
-                            max-height:140px;
-                            max-width:140px;
-                            width:auto;
-                            height:auto;
-                            object-fit:contain;
-                            border:1px solid #ddd;
-                            border-radius:6px;
-                            background:#fff;
-                        ">
+                <div class="img-cell-wrapper">
+                    <img src="{img}" class="sku-image"/>
                 </div>
             """
         else:
-            d["image_html"] = "No Image"
+            d["image_html"] = """
+                <div class="img-cell-wrapper no-image">
+                    No Image
+                </div>
+            """
 
     return data

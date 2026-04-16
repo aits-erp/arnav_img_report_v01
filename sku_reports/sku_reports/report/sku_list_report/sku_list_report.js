@@ -67,18 +67,48 @@ frappe.query_reports["SKU List Report"] = {
         setTimeout(() => {
             const style = document.createElement("style");
             style.innerHTML = `
-                .dt-row {
-                    height: 150px !important;
-                }
 
-                .dt-cell {
-                    height: 150px !important;
-                    vertical-align: middle !important;
-                }
+            /* ✅ Let row expand naturally */
+            .dt-row {
+                height: auto !important;
+            }
 
-                .dt-scrollable {
-                    overflow: visible !important;
-                }
+            .dt-cell {
+                height: auto !important;
+                display: flex;
+                align-items: center;
+            }
+
+            .dt-cell__content {
+                height: auto !important;
+                white-space: normal !important;
+            }
+
+            /* ✅ Image container controls row height */
+            .img-cell-wrapper {
+                height: 140px;
+                width: 140px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            /* ✅ Image fills container */
+            .sku-image {
+                height: 100%;
+                width: 100%;
+                object-fit: contain;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                background: #fff;
+            }
+
+            /* No image text */
+            .no-image {
+                color: #888;
+                font-size: 12px;
+            }
+
             `;
             document.head.appendChild(style);
         }, 800);
