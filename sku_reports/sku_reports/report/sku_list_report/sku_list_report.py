@@ -195,8 +195,8 @@ def get_data(filters):
                 <img src="{img}"
                     class="sku-popup-img"
                     style="
-                        height:32px;
-                        # width:px;
+                        height:25px;
+                        width:120px;
                         object-fit:contain;
                         border-radius:6px;
                         border:1px solid #ddd;
