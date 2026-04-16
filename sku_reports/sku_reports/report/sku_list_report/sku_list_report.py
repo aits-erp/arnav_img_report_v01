@@ -110,8 +110,10 @@ import frappe
 
 def execute(filters=None):
     filters = filters or {}
+
     columns = get_columns()
     data = get_data(filters)
+
     return columns, data
 
 
@@ -120,6 +122,7 @@ def execute(filters=None):
 # =========================
 def get_columns():
     return [
+
         {
             "label": "SKU Code",
             "fieldname": "sku_code",
@@ -127,13 +130,17 @@ def get_columns():
             "options": "SKU",
             "width": 170
         },
+
         {"label": "Product", "fieldname": "product", "fieldtype": "Data", "width": 140},
         {"label": "Warehouse", "fieldname": "warehouse", "fieldtype": "Data", "width": 120},
         {"label": "Metal", "fieldname": "metal", "fieldtype": "Data", "width": 100},
         {"label": "Qty", "fieldname": "qty", "fieldtype": "Float", "width": 80},
         {"label": "Cost Price", "fieldname": "cost_price", "fieldtype": "Currency", "width": 110},
         {"label": "Selling Price", "fieldname": "selling_price", "fieldtype": "Currency", "width": 110},
-        {"label": "Image", "fieldname": "image_html", "fieldtype": "HTML", "width": 180},
+
+        # ✅ Image column (unchanged structure)
+        {"label": "Image", "fieldname": "image_html", "fieldtype": "HTML", "width": 120},
+
         {"label": "Status", "fieldname": "status", "fieldtype": "Data", "width": 90},
     ]
 
@@ -178,22 +185,26 @@ def get_data(filters):
     """, values, as_dict=True)
 
     # =========================
-    # IMAGE HTML
+    # IMAGE WITH CLICK SUPPORT
     # =========================
     for d in data:
         img = d.get("image_url")
 
         if img:
             d["image_html"] = f"""
-                <div class="img-cell-wrapper">
-                    <img src="{img}" class="sku-image"/>
-                </div>
+                <img src="{img}"
+                    class="sku-popup-img"
+                    style="
+                        height:140px;
+                        width:120px;
+                        object-fit:contain;
+                        border-radius:6px;
+                        border:1px solid #ddd;
+                        background:#fff;
+                        cursor:pointer;
+                    ">
             """
         else:
-            d["image_html"] = """
-                <div class="img-cell-wrapper no-image">
-                    No Image
-                </div>
-            """
+            d["image_html"] = "<span style='color:gray'>No Image</span>"
 
     return data
