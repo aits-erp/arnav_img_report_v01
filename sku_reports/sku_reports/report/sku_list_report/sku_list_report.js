@@ -34,7 +34,6 @@
 // };
 
 
-
 frappe.query_reports["SKU List Report"] = {
     "filters": [
         {
