@@ -26,14 +26,17 @@ _sku_weight_cache = {}
 
 def get_per_unit_weight_from_sku(item_code, batch_no):
 	"""
-	Fetch gross_weight and qty from SKU doctype.
-	SKU name = batch_no in Stock Ledger Entry.
+	Fetch gross_weight and qty from Sku Master.
+	Per unit weight = gross_weight / qty (total SKUs in that SKU record).
+
+	Example:
+		Sku Master has gross_weight = 100, qty = 10
+		-> per_unit_weight = 100 / 10 = 10
+		-> Each SLE row with actual_qty = 1 gets gross_weight_in = 10 or gross_weight_out = 10
 
 	Match priority:
-		1. SKU name = batch_no  (primary - direct match)
-		2. product = item_code  (fallback - if batch_no not found)
-
-	Per unit weight = gross_weight / qty
+		1. product (item_code) + batch_no  -> exact match
+		2. product (item_code) only        -> fallback
 	Returns 0 if no match found.
 	"""
 	cache_key = (item_code, batch_no)
@@ -42,18 +45,18 @@ def get_per_unit_weight_from_sku(item_code, batch_no):
 
 	sku_row = None
 
-	# 1. Primary: SKU name = batch_no (direct match)
-	if batch_no:
+	# 1. Try exact match: item_code + batch_no
+	if item_code and batch_no:
 		result = frappe.get_all(
 			"SKU",
-			filters={"name": batch_no},
+			filters={"product": item_code, "batch_no": batch_no},
 			fields=["gross_weight", "qty"],
 			limit=1,
 		)
 		if result:
 			sku_row = result[0]
 
-	# 2. Fallback: match by product = item_code
+	# 2. Fallback: match by item_code only
 	if not sku_row and item_code:
 		result = frappe.get_all(
 			"SKU",
@@ -68,7 +71,7 @@ def get_per_unit_weight_from_sku(item_code, batch_no):
 	if sku_row:
 		gross_weight = flt(sku_row.get("gross_weight", 0))
 		sku_qty = flt(sku_row.get("qty", 0))
-		# per unit weight = gross_weight / qty
+		# per unit weight = total gross weight divided by number of SKUs
 		if sku_qty:
 			per_unit_weight = gross_weight / sku_qty
 
@@ -147,26 +150,14 @@ def execute(filters=None):
 		sle.update({"in_qty": max(sle.actual_qty, 0), "out_qty": min(sle.actual_qty, 0)})
 
 		# ---------------- GROSS WEIGHT LOGIC ----------------
-		# per_unit_weight  = gross_weight / qty  (both from SKU doctype)
-		# gross_weight_in  = per_unit_weight * in_qty    (actual_qty > 0)
-		# gross_weight_out = per_unit_weight * |out_qty| (actual_qty < 0)
-		#
-		# Example:
-		#   SKU gross_weight=100, qty=10  -> per_unit_weight = 10
-		#   actual_qty = +2  -> gross_weight_in  = 10 * 2 = 20, gross_weight_out = 0
-		#   actual_qty = -1  -> gross_weight_in  = 0,           gross_weight_out = 10 * 1 = 10
+		# per_unit_weight = gross_weight / qty  (both from Sku Master)
+		# gross_weight_in  = per_unit_weight when actual_qty > 0 (stock IN)
+		# gross_weight_out = per_unit_weight when actual_qty < 0 (stock OUT)
 
 		per_unit_weight = get_per_unit_weight_from_sku(sle.get("item_code"), sle.get("batch_no"))
 
-		if sle.actual_qty > 0:
-			sle["gross_weight_in"] = flt(per_unit_weight * sle.actual_qty, precision)
-			sle["gross_weight_out"] = 0
-		elif sle.actual_qty < 0:
-			sle["gross_weight_in"] = 0
-			sle["gross_weight_out"] = flt(per_unit_weight * abs(sle.actual_qty), precision)
-		else:
-			sle["gross_weight_in"] = 0
-			sle["gross_weight_out"] = 0
+		sle["gross_weight_in"] = per_unit_weight if sle.actual_qty > 0 else 0
+		sle["gross_weight_out"] = per_unit_weight if sle.actual_qty < 0 else 0
 
 		# ----------------------------------------------------
 
@@ -227,24 +218,6 @@ def get_segregated_bundle_entries(sle, bundle_details, batch_balance_dict, filte
 		new_sle.valuation_rate = (
 			stock_value_before_transaction / qty_before_transaction if qty_before_transaction else 0
 		)
-
-		# ---------------- GROSS WEIGHT LOGIC FOR BUNDLE ENTRIES ----------------
-		# Each segregated bundle row (individual SKU) also needs gross weight
-		# SKU name = batch_no, so we match by row.batch_no
-		bundle_batch_no = row.get("batch_no") or new_sle.get("batch_no")
-		bundle_item_code = new_sle.get("item_code")
-		per_unit_weight = get_per_unit_weight_from_sku(bundle_item_code, bundle_batch_no)
-
-		if row.qty > 0:
-			new_sle["gross_weight_in"] = flt(per_unit_weight * abs(row.qty))
-			new_sle["gross_weight_out"] = 0
-		elif row.qty < 0:
-			new_sle["gross_weight_in"] = 0
-			new_sle["gross_weight_out"] = flt(per_unit_weight * abs(row.qty))
-		else:
-			new_sle["gross_weight_in"] = 0
-			new_sle["gross_weight_out"] = 0
-		# -----------------------------------------------------------------------
 
 		segregated_entries.append(new_sle)
 
