@@ -1,3 +1,4 @@
+
 # import frappe
 
 # def execute(filters=None):
@@ -15,7 +16,6 @@
 # def get_columns():
 #     return [
 
-#         # ✅ CHANGED: clickable SKU Code
 #         {
 #             "label": "SKU Code",
 #             "fieldname": "sku_code",
@@ -31,7 +31,7 @@
 #         {"label": "Cost Price", "fieldname": "cost_price", "fieldtype": "Currency", "width": 110},
 #         {"label": "Selling Price", "fieldname": "selling_price", "fieldtype": "Currency", "width": 110},
 
-#         # ✅ HTML image column
+#         # ✅ Image column (unchanged structure)
 #         {"label": "Image", "fieldname": "image_html", "fieldtype": "HTML", "width": 120},
 
 #         {"label": "Status", "fieldname": "status", "fieldtype": "Data", "width": 90},
@@ -78,30 +78,29 @@
 #     """, values, as_dict=True)
 
 #     # =========================
-#     # IMAGE RENDER FIX
+#     # IMAGE WITH CLICK SUPPORT
 #     # =========================
 #     for d in data:
 #         img = d.get("image_url")
 
 #         if img:
-#             img_url = img
-
 #             d["image_html"] = f"""
-#                 <img src="{img_url}"
+#                 <img src="{img}"
+#                     class="sku-popup-img"
 #                     style="
-#                         height:140px;
+#                         height:25px;
 #                         width:120px;
 #                         object-fit:contain;
 #                         border-radius:6px;
 #                         border:1px solid #ddd;
 #                         background:#fff;
+#                         cursor:pointer;
 #                     ">
 #             """
 #         else:
 #             d["image_html"] = "<span style='color:gray'>No Image</span>"
 
 #     return data
-
 
 
 
@@ -118,7 +117,7 @@ def execute(filters=None):
 
 
 # =========================
-# COLUMNS
+# COLUMNS (UNCHANGED)
 # =========================
 def get_columns():
     return [
@@ -138,11 +137,29 @@ def get_columns():
         {"label": "Cost Price", "fieldname": "cost_price", "fieldtype": "Currency", "width": 110},
         {"label": "Selling Price", "fieldname": "selling_price", "fieldtype": "Currency", "width": 110},
 
-        # ✅ Image column (unchanged structure)
         {"label": "Image", "fieldname": "image_html", "fieldtype": "HTML", "width": 120},
 
         {"label": "Status", "fieldname": "status", "fieldtype": "Data", "width": 90},
     ]
+
+
+# =========================
+# GET CHILD WAREHOUSES (NEW)
+# =========================
+def get_child_warehouses(warehouse):
+
+    wh = frappe.db.get_value("Warehouse", warehouse, ["lft", "rgt"], as_dict=1)
+
+    if not wh:
+        return []
+
+    children = frappe.db.sql("""
+        SELECT name
+        FROM `tabWarehouse`
+        WHERE lft >= %s AND rgt <= %s AND is_group = 0
+    """, (wh.lft, wh.rgt), as_list=1)
+
+    return [c[0] for c in children]
 
 
 # =========================
@@ -160,13 +177,25 @@ def get_data(filters):
         conditions += " AND metal = %(metal)s"
         values["metal"] = filters["metal"]
 
+    # =========================
+    # ✅ UPDATED WAREHOUSE LOGIC
+    # =========================
     if filters.get("warehouse"):
-        conditions += " AND warehouse = %(warehouse)s"
-        values["warehouse"] = filters["warehouse"]
+
+        child_wh = get_child_warehouses(filters.get("warehouse"))
+
+        if child_wh:
+            conditions += " AND warehouse IN %(warehouses)s"
+            values["warehouses"] = tuple(child_wh)
+        else:
+            conditions += " AND warehouse = %(warehouse)s"
+            values["warehouse"] = filters["warehouse"]
+
 
     if filters.get("status"):
         conditions += " AND status = %(status)s"
         values["status"] = filters["status"]
+
 
     data = frappe.db.sql(f"""
         SELECT
@@ -184,8 +213,9 @@ def get_data(filters):
         ORDER BY modified DESC
     """, values, as_dict=True)
 
+
     # =========================
-    # IMAGE WITH CLICK SUPPORT
+    # IMAGE WITH CLICK SUPPORT (UNCHANGED)
     # =========================
     for d in data:
         img = d.get("image_url")
