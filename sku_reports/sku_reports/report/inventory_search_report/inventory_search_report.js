@@ -1,0 +1,153 @@
+// Copyright (c) 2026, Sukku and contributors
+// For license information, please see license.txt
+
+
+frappe.query_reports["INVENTORY SEARCH REPORT"] = {
+
+    "filters": [
+
+        {
+            "fieldname": "sku_code",
+            "label": "SKU Code",
+            "fieldtype": "Link",
+            "options": "SKU"
+        },
+
+        {
+            "fieldname": "metal",
+            "label": "Metal",
+            "fieldtype": "Link",
+            "options": "Metal Master"
+        },
+
+        {
+            "fieldname": "supplier",
+            "label": "Supplier",
+            "fieldtype": "Link",
+            "options": "Supplier"
+        },
+
+        {
+            "fieldname": "warehouse",
+            "label": "Warehouse",
+            "fieldtype": "Link",
+            "options": "Warehouse",
+
+            get_query: function() {
+                return {
+                    filters: {
+                        is_group: 1
+                    }
+                };
+            }
+        },
+
+        {
+            "fieldname": "status",
+            "label": "Status",
+            "fieldtype": "Select",
+            "options": "\nAvailable\nSold"
+        }
+    ],
+
+
+    onload: function(report) {
+
+        setTimeout(() => {
+
+            // =========================
+            // CREATE IMAGE MODAL
+            // =========================
+            if (!document.getElementById("img-preview-modal")) {
+
+                const modal = document.createElement("div");
+
+                modal.id = "img-preview-modal";
+
+                modal.innerHTML = `
+                    <div class="img-preview-overlay"></div>
+
+                    <div class="img-preview-content">
+                        <img id="img-preview-tag" src="" />
+                    </div>
+                `;
+
+                document.body.appendChild(modal);
+            }
+
+
+            // =========================
+            // MODAL CSS
+            // =========================
+            const style = document.createElement("style");
+
+            style.innerHTML = `
+
+                #img-preview-modal {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 9999;
+                }
+
+                .img-preview-overlay {
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.7);
+                }
+
+                .img-preview-content {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    max-width: 90%;
+                    max-height: 90%;
+                }
+
+                .img-preview-content img {
+                    width: auto;
+                    height: auto;
+                    max-width: 100%;
+                    max-height: 90vh;
+                    border-radius: 8px;
+                    background: #fff;
+                }
+
+            `;
+
+            document.head.appendChild(style);
+
+
+            // =========================
+            // IMAGE CLICK EVENT
+            // =========================
+            document.addEventListener("click", function(e) {
+
+                if (e.target.classList.contains("sku-popup-img")) {
+
+                    const modal = document.getElementById("img-preview-modal");
+
+                    const imgTag = document.getElementById("img-preview-tag");
+
+                    imgTag.src = e.target.src;
+
+                    modal.style.display = "block";
+                }
+
+                // CLOSE MODAL
+                if (e.target.classList.contains("img-preview-overlay")) {
+
+                    document.getElementById(
+                        "img-preview-modal"
+                    ).style.display = "none";
+                }
+            });
+
+        }, 800);
+    }
+};
