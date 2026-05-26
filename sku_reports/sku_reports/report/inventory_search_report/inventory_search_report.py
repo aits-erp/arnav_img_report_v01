@@ -59,7 +59,15 @@ def get_child_warehouses(warehouse):
 # DATA
 # =========================
 def get_data(filters):
-    conditions = " WHERE 1=1 "
+    conditions = """
+        WHERE 1=1
+        AND (
+            SELECT COALESCE(SUM(sle.actual_qty), 0)
+            FROM `tabStock Ledger Entry` sle
+            WHERE sle.batch_no = `tabSKU`.sku_code
+            AND sle.is_cancelled = 0
+        ) > 0
+    """
     values = {}
 
     if filters.get("sku_code"):
@@ -70,11 +78,7 @@ def get_data(filters):
         conditions += " AND metal = %(metal)s"
         values["metal"] = filters["metal"]
 
-    # =========================
-    # ✅ UPDATED WAREHOUSE LOGIC
-    # =========================
     if filters.get("warehouse"):
-
         child_wh = get_child_warehouses(filters.get("warehouse"))
 
         if child_wh:
