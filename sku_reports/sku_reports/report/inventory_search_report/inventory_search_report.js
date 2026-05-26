@@ -1,5 +1,5 @@
 
-frappe.query_reports["SKU List Report"] = {
+frappe.query_reports["Inventory Search Report"] = {
     "filters": [
         {
             "fieldname": "sku_code",
