@@ -240,7 +240,7 @@ def get_payment_rows(filters):
 def get_bank_drop_amount(filters):
     result = frappe.db.sql("""
         SELECT SUM(deposited_amount)
-        FROM `tabBank Drop`
+        FROM `tabBANK DROP`
         WHERE docstatus = 1
     """, filters)
 
