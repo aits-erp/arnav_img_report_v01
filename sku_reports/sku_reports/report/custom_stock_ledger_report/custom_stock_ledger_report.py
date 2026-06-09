@@ -1,6 +1,5 @@
-# # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
-# # License: GNU General Public License v3. See license.txt
-
+# # # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
+# # # License: GNU General Public License v3. See license.txt
 
 # import copy
 # from collections import defaultdict
@@ -71,7 +70,6 @@
 # 	if sku_row:
 # 		gross_weight = flt(sku_row.get("gross_weight", 0))
 # 		sku_qty = flt(sku_row.get("qty", 0))
-# 		# per unit weight = total gross weight divided by number of SKUs
 # 		if sku_qty:
 # 			per_unit_weight = gross_weight / sku_qty
 
@@ -150,15 +148,10 @@
 # 		sle.update({"in_qty": max(sle.actual_qty, 0), "out_qty": min(sle.actual_qty, 0)})
 
 # 		# ---------------- GROSS WEIGHT LOGIC ----------------
-# 		# per_unit_weight = gross_weight / qty  (both from Sku Master)
-# 		# gross_weight_in  = per_unit_weight when actual_qty > 0 (stock IN)
-# 		# gross_weight_out = per_unit_weight when actual_qty < 0 (stock OUT)
-
 # 		per_unit_weight = get_per_unit_weight_from_sku(sle.get("item_code"), sle.get("batch_no"))
 
 # 		sle["gross_weight_in"] = per_unit_weight if sle.actual_qty > 0 else 0
 # 		sle["gross_weight_out"] = per_unit_weight if sle.actual_qty < 0 else 0
-
 # 		# ----------------------------------------------------
 
 # 		if sle.serial_no:
@@ -279,6 +272,13 @@
 # def get_columns(filters):
 # 	columns = [
 # 		{"label": _("Date"), "fieldname": "date", "fieldtype": "Datetime", "width": 150},
+# 		{
+# 			"label": _("SKU"),
+# 			"fieldname": "batch_no",
+# 			"fieldtype": "Link",
+# 			"options": "Batch",
+# 			"width": 100,
+# 		},
 # 		{
 # 			"label": _("Item"),
 # 			"fieldname": "item_code",
@@ -415,15 +415,6 @@
 # 				"width": 100,
 # 			},
 # 			{
-# 				"label": _("SKU"),
-# 				"fieldname": "batch_no",
-# 				"fieldtype": "Link",
-# 				"options": "Batch",
-# 				"width": 100,
-# 			},
-# 			{
-
-				
 # 				"label": _("Serial No"),
 # 				"fieldname": "serial_no",
 # 				"fieldtype": "Link",
@@ -455,7 +446,6 @@
 # 	)
 
 # 	return columns
-
 
 
 # def get_stock_ledger_entries(filters, items):
@@ -785,9 +775,10 @@
 # 	return False
 
 
-# Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
-# License: GNU General Public License v3. See license.txt
 
+
+# # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
+# # License: GNU General Public License v3. See license.txt
 
 import copy
 from collections import defaultdict
@@ -1278,6 +1269,16 @@ def get_stock_ledger_entries(filters, items):
 	if items:
 		query = query.where(sle.item_code.isin(items))
 
+	# -------------------------------------------------------------------
+	# SKIP ITEMS WHERE Sub Group (custom_sub_group) == "Component"
+	# These items must never appear in the report. We exclude them via a
+	# subquery on the Item doctype so the rest of the logic is untouched.
+	# -------------------------------------------------------------------
+	component_items = get_component_subgroup_items()
+	if component_items:
+		query = query.where(sle.item_code.notin(component_items))
+	# -------------------------------------------------------------------
+
 	for field in ["voucher_no", "project", "company"]:
 		if filters.get(field) and field not in inventory_dimension_fields:
 			query = query.where(sle[field] == filters.get(field))
@@ -1295,6 +1296,20 @@ def get_stock_ledger_entries(filters, items):
 	query = apply_warehouse_filter(query, sle, filters)
 
 	return query.run(as_dict=True)
+
+
+def get_component_subgroup_items():
+	"""
+	Return a list of Item codes whose Sub Group (custom_sub_group) is 'Component'.
+
+	Items in this list are excluded from the report entirely.
+	Returns an empty list if no such items exist.
+	"""
+	return frappe.get_all(
+		"Item",
+		filters={"custom_sub_group": "Component"},
+		pluck="name",
+	)
 
 
 def get_serial_and_batch_bundles(filters):
