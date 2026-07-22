@@ -239,6 +239,7 @@
 #         "gross_weight",
 #         "net_weight",
 #         "weight",
+#         "created_from_pi",
 #     ]
 #     select_fields = ["name", "modified"]
 #     select_fields.extend([fieldname for fieldname in optional_fields if fieldname in sku_fields])
@@ -270,6 +271,19 @@
 #     return metadata
 
 
+# def get_purchase_invoice_dates(pi_names):
+#     if not pi_names:
+#         return {}
+
+#     rows = frappe.db.sql("""
+#         SELECT name, posting_date
+#         FROM `tabPurchase Invoice`
+#         WHERE name IN %(pi_names)s
+#     """, {"pi_names": tuple(pi_names)}, as_dict=True)
+
+#     return {row.name: row.posting_date for row in rows}
+
+
 # def get_image_html(img):
 #     if not img:
 #         return "<span style='color:gray'>No Image</span>"
@@ -289,12 +303,19 @@
 #     """
 
 
-# def passes_metadata_filters(sku_info, filters):
+# def passes_metadata_filters(sku_info, filters, pi_dates=None):
 #     if filters.get("metal") and sku_info.get("metal") != filters.get("metal"):
 #         return False
 
 #     if filters.get("supplier") and sku_info.get("supplier") != filters.get("supplier"):
 #         return False
+
+#     if filters.get("purchase_received_date"):
+#         pi_name = sku_info.get("created_from_pi")
+#         pi_date = (pi_dates or {}).get(pi_name) if pi_name else None
+
+#         if not pi_date or str(pi_date) != str(filters.get("purchase_received_date")):
+#             return False
 
 #     return True
 
@@ -309,12 +330,19 @@
 #     sku_metadata = get_sku_metadata([row.sku_code for row in stock_rows])
 #     weight_field = get_weight_field()
 
+#     pi_names = {
+#         info.get("created_from_pi")
+#         for info in sku_metadata.values()
+#         if info.get("created_from_pi")
+#     }
+#     pi_dates = get_purchase_invoice_dates(pi_names)
+
 #     filtered_data = []
 
 #     for stock_row in stock_rows:
 #         sku_info = sku_metadata.get(stock_row.sku_code) or frappe._dict()
 
-#         if not passes_metadata_filters(sku_info, filters):
+#         if not passes_metadata_filters(sku_info, filters, pi_dates):
 #             continue
 
 #         row = frappe._dict({
@@ -335,6 +363,7 @@
 #         filtered_data.append(row)
 
 #     return filtered_data
+
 
 
 
@@ -373,6 +402,24 @@ def get_columns():
 
         {"label": "Status", "fieldname": "status", "fieldtype": "Data", "width": 90},
     ]
+
+
+# --- ADDED: items to completely exclude from this report -------------------
+# Add/remove names here (case-insensitive, extra spaces are ignored).
+EXCLUDED_PRODUCTS = {
+    "gold ornaments",
+    "silver ornaments",
+    "silver component",
+    "brass component",
+    "gold component",
+}
+
+
+def is_excluded_product(product_name):
+    if not product_name:
+        return False
+    return str(product_name).strip().lower() in EXCLUDED_PRODUCTS
+# -----------------------------------------------------------------------------
 
 
 def get_sku_fieldnames():
@@ -685,9 +732,16 @@ def get_data(filters):
         if not passes_metadata_filters(sku_info, filters, pi_dates):
             continue
 
+        product_name = stock_row.product or sku_info.get("product")
+
+        # --- ADDED: skip completely excluded items -------------------------
+        if is_excluded_product(product_name):
+            continue
+        # ---------------------------------------------------------------------
+
         row = frappe._dict({
             "sku_code": stock_row.sku_code,
-            "product": stock_row.product or sku_info.get("product"),
+            "product": product_name,
             "warehouse": stock_row.warehouse,
             "metal": sku_info.get("metal"),
             "qty": stock_row.qty,
