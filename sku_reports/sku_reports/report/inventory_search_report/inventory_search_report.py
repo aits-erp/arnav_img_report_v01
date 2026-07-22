@@ -404,24 +404,6 @@ def get_columns():
     ]
 
 
-# --- ADDED: items to completely exclude from this report -------------------
-# Add/remove names here (case-insensitive, extra spaces are ignored).
-EXCLUDED_PRODUCTS = {
-    "gold ornaments",
-    "silver ornaments",
-    "silver component",
-    "brass component",
-    "gold component",
-}
-
-
-def is_excluded_product(product_name):
-    if not product_name:
-        return False
-    return str(product_name).strip().lower() in EXCLUDED_PRODUCTS
-# -----------------------------------------------------------------------------
-
-
 def get_sku_fieldnames():
     return {df.fieldname for df in frappe.get_meta("SKU").fields}
 
@@ -671,6 +653,18 @@ def get_purchase_invoice_dates(pi_names):
     return {row.name: row.posting_date for row in rows}
 
 
+def get_excluded_items():
+    """Items where the 'In SKU Report' checkbox (custom_in_sku_report) is checked
+    should NOT appear in this report."""
+    rows = frappe.db.sql("""
+        SELECT name
+        FROM `tabItem`
+        WHERE IFNULL(custom_in_sku_report, 0) = 1
+    """, as_list=True)
+
+    return {r[0] for r in rows}
+
+
 def get_image_html(img):
     if not img:
         return "<span style='color:gray'>No Image</span>"
@@ -716,6 +710,7 @@ def get_data(filters):
     stock_rows = get_current_stock_balances(sku_codes=sku_codes, warehouses=warehouses)
     sku_metadata = get_sku_metadata([row.sku_code for row in stock_rows])
     weight_field = get_weight_field()
+    excluded_items = get_excluded_items()
 
     pi_names = {
         info.get("created_from_pi")
@@ -727,21 +722,17 @@ def get_data(filters):
     filtered_data = []
 
     for stock_row in stock_rows:
+        if stock_row.product in excluded_items:
+            continue
+
         sku_info = sku_metadata.get(stock_row.sku_code) or frappe._dict()
 
         if not passes_metadata_filters(sku_info, filters, pi_dates):
             continue
 
-        product_name = stock_row.product or sku_info.get("product")
-
-        # --- ADDED: skip completely excluded items -------------------------
-        if is_excluded_product(product_name):
-            continue
-        # ---------------------------------------------------------------------
-
         row = frappe._dict({
             "sku_code": stock_row.sku_code,
-            "product": product_name,
+            "product": stock_row.product or sku_info.get("product"),
             "warehouse": stock_row.warehouse,
             "metal": sku_info.get("metal"),
             "qty": stock_row.qty,

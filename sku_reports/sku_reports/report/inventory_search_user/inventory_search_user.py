@@ -638,6 +638,16 @@ def get_sku_metadata(sku_codes):
     return metadata
 
 
+def get_excluded_items():
+    rows = frappe.db.sql("""
+        SELECT name
+        FROM `tabItem`
+        WHERE custom_in_sku_report = 1
+    """, as_dict=True)
+
+    return {row.name for row in rows}
+
+
 def get_purchase_invoice_dates(pi_names):
     if not pi_names:
         return {}
@@ -696,6 +706,7 @@ def get_data(filters):
     stock_rows = get_current_stock_balances(sku_codes=sku_codes, warehouses=warehouses)
     sku_metadata = get_sku_metadata([row.sku_code for row in stock_rows])
     weight_field = get_weight_field()
+    excluded_items = get_excluded_items()
 
     pi_names = {
         info.get("created_from_pi")
@@ -707,6 +718,9 @@ def get_data(filters):
     filtered_data = []
 
     for stock_row in stock_rows:
+        if stock_row.product in excluded_items:
+            continue
+
         sku_info = sku_metadata.get(stock_row.sku_code) or frappe._dict()
 
         if not passes_metadata_filters(sku_info, filters, pi_dates):
