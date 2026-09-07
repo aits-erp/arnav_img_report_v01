@@ -1,3 +1,4 @@
+
 # import frappe
 # from frappe.utils import flt
 
@@ -284,6 +285,18 @@
 #     return {row.name: row.posting_date for row in rows}
 
 
+# def get_excluded_items():
+#     """Items where the 'In SKU Report' checkbox (custom_in_sku_report) is checked
+#     should NOT appear in this report."""
+#     rows = frappe.db.sql("""
+#         SELECT name
+#         FROM `tabItem`
+#         WHERE IFNULL(custom_in_sku_report, 0) = 1
+#     """, as_list=True)
+
+#     return {r[0] for r in rows}
+
+
 # def get_image_html(img):
 #     if not img:
 #         return "<span style='color:gray'>No Image</span>"
@@ -329,6 +342,7 @@
 #     stock_rows = get_current_stock_balances(sku_codes=sku_codes, warehouses=warehouses)
 #     sku_metadata = get_sku_metadata([row.sku_code for row in stock_rows])
 #     weight_field = get_weight_field()
+#     excluded_items = get_excluded_items()
 
 #     pi_names = {
 #         info.get("created_from_pi")
@@ -340,6 +354,9 @@
 #     filtered_data = []
 
 #     for stock_row in stock_rows:
+#         if stock_row.product in excluded_items:
+#             continue
+
 #         sku_info = sku_metadata.get(stock_row.sku_code) or frappe._dict()
 
 #         if not passes_metadata_filters(sku_info, filters, pi_dates):
@@ -364,11 +381,9 @@
 
 #     return filtered_data
 
-
-
-
 import frappe
-from frappe.utils import flt
+from frappe.utils import flt, escape_html
+
 
 def execute(filters=None):
     filters = filters or {}
@@ -401,6 +416,9 @@ def get_columns():
         {"label": "Image", "fieldname": "image_html", "fieldtype": "HTML", "width": 120},
 
         {"label": "Status", "fieldname": "status", "fieldtype": "Data", "width": 90},
+
+        # New final column
+        {"label": "Breakup Details", "fieldname": "breakup_html", "fieldtype": "HTML", "width": 140},
     ]
 
 
@@ -434,7 +452,6 @@ def get_weight_columns():
 
 
 def get_child_warehouses(warehouse):
-
     wh = frappe.db.get_value("Warehouse", warehouse, ["lft", "rgt"], as_dict=1)
 
     if not wh:
@@ -609,6 +626,10 @@ def get_sku_metadata(sku_codes):
         "net_weight",
         "weight",
         "created_from_pi",
+
+        # Required for the new breakup button
+        "sku_master",
+        "breakup_ref",
     ]
     select_fields = ["name", "modified"]
     select_fields.extend([fieldname for fieldname in optional_fields if fieldname in sku_fields])
@@ -684,6 +705,22 @@ def get_image_html(img):
     """
 
 
+def get_breakup_html(sku_master, breakup_ref):
+    """Return a safe, read-only action button for this SKU's breakup."""
+    if not sku_master or not breakup_ref:
+        return "<span style='color:#8d99a6'>No breakup</span>"
+
+    return f"""
+        <button
+            type="button"
+            class="btn btn-xs btn-default inventory-breakup-button"
+            data-sku-master="{escape_html(str(sku_master))}"
+            data-breakup-ref="{escape_html(str(breakup_ref))}">
+            View Breakup
+        </button>
+    """
+
+
 def passes_metadata_filters(sku_info, filters, pi_dates=None):
     if filters.get("metal") and sku_info.get("metal") != filters.get("metal"):
         return False
@@ -740,6 +777,12 @@ def get_data(filters):
             "selling_price": sku_info.get("selling_price"),
             "image_html": get_image_html(sku_info.get("image_url") or sku_info.get("image")),
             "status": "Available",
+
+            # New final-column button
+            "breakup_html": get_breakup_html(
+                sku_info.get("sku_master"),
+                sku_info.get("breakup_ref"),
+            ),
         })
 
         if weight_field:
