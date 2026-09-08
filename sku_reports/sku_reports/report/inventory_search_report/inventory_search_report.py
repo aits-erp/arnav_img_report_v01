@@ -394,6 +394,42 @@ def execute(filters=None):
     return columns, data
 
 
+@frappe.whitelist()
+def download_sku_breakup_export(filters=None):
+    """Download the current report selection with its SKU breakup rows."""
+    from .sku_breakup_excel import download_workbook
+
+    frappe.only_for("System Manager")
+    return download_workbook(filters=filters, template_only=False)
+
+
+@frappe.whitelist()
+def download_sku_breakup_import_template():
+    """Download a blank workbook whose headers match the import format."""
+    from .sku_breakup_excel import download_workbook
+
+    frappe.only_for("System Manager")
+    return download_workbook(template_only=True)
+
+
+@frappe.whitelist()
+def validate_sku_breakup_import(file_url):
+    """Validate an uploaded workbook without changing any SKU data."""
+    from .sku_breakup_excel import validate_import_file
+
+    frappe.only_for("System Manager")
+    return validate_import_file(file_url)
+
+
+@frappe.whitelist()
+def apply_sku_breakup_import(import_token):
+    """Revalidate and apply a previously validated import in this request."""
+    from .sku_breakup_excel import apply_import
+
+    frappe.only_for("System Manager")
+    return apply_import(import_token)
+
+
 def get_columns():
     return [
 
@@ -772,6 +808,10 @@ def get_data(filters):
             "product": stock_row.product or sku_info.get("product"),
             "warehouse": stock_row.warehouse,
             "metal": sku_info.get("metal"),
+            # Internal export values. They are intentionally not report columns.
+            "supplier": sku_info.get("supplier"),
+            "sku_master": sku_info.get("sku_master"),
+            "breakup_ref": sku_info.get("breakup_ref"),
             "qty": stock_row.qty,
             "cost_price": sku_info.get("cost_price"),
             "selling_price": sku_info.get("selling_price"),

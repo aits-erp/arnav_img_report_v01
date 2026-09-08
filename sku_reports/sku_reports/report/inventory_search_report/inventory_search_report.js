@@ -38,6 +38,8 @@ frappe.query_reports["Inventory Search Report"] = {
     ],
 
     onload: function (report) {
+        addSkuBreakupExcelButtons(report);
+
         setTimeout(() => {
             if (!document.getElementById("img-preview-modal")) {
                 const modal = document.createElement("div");
@@ -208,3 +210,104 @@ frappe.query_reports["Inventory Search Report"] = {
         }, 800);
     }
 };
+
+
+function addSkuBreakupExcelButtons(report) {
+    if (report._skuBreakupExcelButtonsAdded) {
+        return;
+    }
+
+    report._skuBreakupExcelButtonsAdded = true;
+    report.page.add_inner_button(__("Export SKU + Breakup"), () => {
+        const filters = report.get_values ? report.get_values() : {};
+        downloadSkuBreakupWorkbook(
+            "sku_reports.sku_reports.report.inventory_search_report.inventory_search_report.download_sku_breakup_export",
+            { filters: JSON.stringify(filters) }
+        );
+    });
+    report.page.add_inner_button(__("Download Import Template"), () => {
+        downloadSkuBreakupWorkbook(
+            "sku_reports.sku_reports.report.inventory_search_report.inventory_search_report.download_sku_breakup_import_template"
+        );
+    });
+    report.page.add_inner_button(__("Import SKU + Breakup"), () => {
+        uploadSkuBreakupWorkbook();
+    });
+}
+
+
+function downloadSkuBreakupWorkbook(method, args = {}) {
+    const query = new URLSearchParams(args).toString();
+    const url = `/api/method/${method}${query ? `?${query}` : ""}`;
+    window.open(url, "_blank");
+}
+
+
+function uploadSkuBreakupWorkbook() {
+    new frappe.ui.FileUploader({
+        allow_multiple: false,
+        on_success(fileDoc) {
+            if (!fileDoc.file_url || !fileDoc.file_url.toLowerCase().endsWith(".xlsx")) {
+                frappe.msgprint({
+                    title: __("Invalid file"),
+                    message: __("Please upload an .xlsx workbook."),
+                    indicator: "red"
+                });
+                return;
+            }
+
+            frappe.call({
+                method: "sku_reports.sku_reports.report.inventory_search_report.inventory_search_report.validate_sku_breakup_import",
+                args: { file_url: fileDoc.file_url },
+                freeze: true,
+                freeze_message: __("Validating SKU breakup import..."),
+                callback(response) {
+                    const result = response.message || {};
+                    if (!result.ok) {
+                        showSkuBreakupImportErrors(result.errors || [__("The workbook could not be validated.")]);
+                        return;
+                    }
+
+                    frappe.confirm(
+                        __(
+                            "Import {0} SKU row(s) and replace breakup details for {1} SKU row(s)?",
+                            [result.sku_count, result.breakup_update_count]
+                        ),
+                        () => applySkuBreakupImport(result.import_token)
+                    );
+                }
+            });
+        }
+    });
+}
+
+
+function applySkuBreakupImport(importToken) {
+    frappe.call({
+        method: "sku_reports.sku_reports.report.inventory_search_report.inventory_search_report.apply_sku_breakup_import",
+        args: { import_token: importToken },
+        freeze: true,
+        freeze_message: __("Importing SKU breakup details..."),
+        callback(response) {
+            const result = response.message || {};
+            frappe.show_alert({
+                message: __(
+                    "Updated {0} SKU row(s) and {1} breakup set(s).",
+                    [result.updated_skus || 0, result.updated_breakups || 0]
+                ),
+                indicator: "green"
+            });
+            frappe.query_report.refresh();
+        }
+    });
+}
+
+
+function showSkuBreakupImportErrors(errors) {
+    const safeErrors = errors.map((error) => frappe.utils.escape_html(String(error)));
+    frappe.msgprint({
+        title: __("Import validation failed"),
+        indicator: "red",
+        message: `<div>${__("No data was changed. Please correct all of the following:")}</div><ul><li>${safeErrors.join("</li><li>")}</li></ul>`
+    });
+}
